@@ -6,6 +6,8 @@ import (
 	"io/ioutil"
 	"net/http"
 	"time"
+
+	"github.com/ONSdigital/log.go/log"
 )
 
 type Client struct {
@@ -13,20 +15,7 @@ type Client struct {
 	HttpCli http.Client
 }
 
-type ResponseEntity struct {
-	Transaction *Transaction `json:"transaction"`
-}
 
-type Transaction struct {
-	ID         string        `json:"id"`
-	Status     string        `json:"status"`
-	StartDate  string        `json:"startDate"`
-	EndDate    string        `json:"startDate"`
-	UriInfos   []interface{} `json:"uriInfos"`
-	UriDeletes []interface{} `json:"uriDeletes"`
-	Errors     []interface{} `json:"errors"`
-	Files      interface{}   `json:"files"`
-}
 
 func NewClient() *Client {
 	return &Client{
@@ -41,25 +30,51 @@ func (c *Client) Begin() (*Transaction, error) {
 		return nil, err
 	}
 
-	resp, err := c.HttpCli.Do(r)
+	var result ResponseEntity
+	if err := c.doReq(r, http.StatusOK, &result); err != nil {
+		return nil, err
+	}
+
+	log.Event(nil, "begin transaction request completed successfully", log.INFO, log.Data{"id": result.Transaction.ID})
+	return result.Transaction, nil
+}
+
+func (c *Client) HealthCheck() (*HealthStatus, error) {
+	req, err := http.NewRequest("GET", "http://localhost:8084/health", nil)
 	if err != nil {
 		return nil, err
 	}
 
+	var status HealthStatus
+	if err := c.doReq(req, http.StatusOK, &status); err != nil {
+		return nil, err
+	}
+
+	log.Event(nil, "The-Train HealthCheck request successful", log.INFO)
+	return &status, nil
+}
+
+func (c *Client) doReq(req *http.Request, expectedStatus int, entity interface{}) error {
+	resp, err := c.HttpCli.Do(req)
+	if err != nil {
+		return err
+	}
+
 	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("begin transaction: incorrect response status expected 200 but was %d", resp.StatusCode)
+	if resp.StatusCode != expectedStatus {
+		return fmt.Errorf("incorrect response status expected 200 but was %d", resp.StatusCode)
 	}
 
 	b, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
-	var entity ResponseEntity
-	if err := json.Unmarshal(b, &entity); err != nil {
-		return nil, err
+	if err := json.Unmarshal(b, entity); err != nil {
+		return err
 	}
 
-	return entity.Transaction, nil
+	return nil
 }
+
+

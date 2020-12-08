@@ -1,9 +1,8 @@
 package main
 
 import (
+	"errors"
 	"os"
-	"os/signal"
-	"syscall"
 	"testing"
 
 	"github.com/ONSdigital/dp-train-tests/train"
@@ -11,42 +10,20 @@ import (
 )
 
 func TestMain(m *testing.M) {
-	signals := make(chan os.Signal, 1)
-	signal.Notify(signals, syscall.SIGINT, syscall.SIGTERM, os.Interrupt)
+	log.Namespace = "dp-train-tests"
 
-	t, err := startUp()
-	if err != nil {
-		log.Event(nil, "error", log.Error(err), log.ERROR)
+	if err := setUp(); err != nil {
+		log.Event(nil, "error setting up", log.Error(err), log.ERROR)
 		os.Exit(1)
 	}
 
-	go func() {
-		m.Run()
-		train.GetInstance().CompletedC <- true
-	}()
-
-	select {
-	case <-t.CompletedC:
-		log.Event(nil, "completed tests shutting down", log.INFO)
-		t.Stop()
-	case err := <-t.ErrC:
-		log.Event(nil, "train runner returned an error shutting down", log.Error(err), log.ERROR)
-		t.Stop()
-	case s := <-signals:
-		log.Event(nil, "signal intercepted shutting down", log.INFO, log.Data{"signal": s.String()})
-		t.Stop()
-	}
+	m.Run()
 }
 
-func startUp() (*train.Instance, error) {
-	t, err := train.NewRunner()
-	if err != nil {
-		return nil, err
+func setUp() error {
+	trainCli := train.NewClient()
+	if _, err := trainCli.HealthCheck(); err != nil {
+		return errors.New("train instance not running - please start your instance and try again")
 	}
-
-	if err := t.Start(); err != nil {
-		return nil, err
-	}
-
-	return t, nil
+	return nil
 }

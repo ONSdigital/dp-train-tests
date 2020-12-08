@@ -9,120 +9,62 @@ import (
 	"github.com/ONSdigital/dp-train-tests/train"
 )
 
-func ShouldCreateTransaction(actual interface{}, expected ...interface{}) string {
-	transaction, ok := actual.(*train.Transaction)
-	if !ok {
-		return "expected transaction"
-	}
-
-	transDir := filepath.Join(train.GetInstance().TransactionsDir, transaction.ID)
-	fmt.Printf("transaction dir %q\n", transDir)
-
-	if !dirExists(transDir) {
-		return "expected transaction directory but none found"
-	}
-
-	backupDir := filepath.Join(transDir, "backup")
-	fmt.Printf("backup dir %q\n", backupDir)
-
-	if !dirExists(backupDir) {
-		return "expected backup directory but none found"
-	}
-
-	contentDir := filepath.Join(transDir, "content")
-	if !dirExists(contentDir) {
-		return "expected content directory but none found"
-	}
-
-	transactionJson := filepath.Join(transDir, "transaction.json")
-	f, err := os.Open(transactionJson)
-	if err != nil {
-		return "unexpected error while reading transaction.json file"
-	}
-
-	defer f.Close()
-
-	var t train.Transaction
-	if err := json.NewDecoder(f).Decode(&t); err != nil {
-		return "unexpected error while marshalling transaction.json file"
-	}
-
-	if t.ID != transaction.ID {
-
-	}
-
-	return ""
-}
-
+// ShouldCreateTransactionDir is an custom Smarty Streets Convey assertion function verifying the expected publishing
+// transaction directory has been created. A *train.Transaction is required for the "actual" parameter.
 func ShouldCreateTransactionDir(actual interface{}, expected ...interface{}) string {
-	trainInstance, ok := actual.(*train.Instance)
+	tx, ok := actual.(*train.Transaction)
 	if !ok {
-		return "expected *train.Instance for actual arg"
+		return "expected *train.Transaction for actual arg"
 	}
 
-	transaction, ok := expected[0].(*train.Transaction)
-	if !ok {
-		return "expected *train.Transaction for expected arg[0]"
-	}
-
-	dir := filepath.Join(trainInstance.TransactionsDir, transaction.ID)
-	if !dirExists(dir) {
+	if !dirExists(tx.GetPath()) {
 		return "expected transaction directory but none found"
 	}
 
 	return ""
 }
 
+// ShouldCreateBackupDir is an custom Smarty Streets Convey assertion function verifying the expected publishing
+// transaction backup directory has been created. A *train.Transaction is required for the "actual" parameter.
 func ShouldCreateBackupDir(actual interface{}, expected ...interface{}) string {
-	trainInstance, ok := actual.(*train.Instance)
+	tx, ok := actual.(*train.Transaction)
 	if !ok {
-		return "expected *train.Instance for actual arg"
+		return "expected *train.Transaction for actual arg"
 	}
 
-	transaction, ok := expected[0].(*train.Transaction)
-	if !ok {
-		return "expected *train.Transaction for expected arg[0]"
-	}
-
-	dir := filepath.Join(trainInstance.TransactionsDir, transaction.ID, "backup")
-	if !dirExists(dir) {
-		return "expected backup directory but none found"
+	path := filepath.Join(tx.GetPath(), "backup")
+	if !dirExists(path) {
+		return "expected transaction backup directory but not found"
 	}
 
 	return ""
 }
 
+// ShouldCreateContentDir is an custom Smarty Streets Convey assertion function verifying the expected publishing
+// transaction content directory has been created. A *train.Transaction is required for the "actual" parameter.
 func ShouldCreateContentDir(actual interface{}, expected ...interface{}) string {
-	trainInstance, ok := actual.(*train.Instance)
+	tx, ok := actual.(*train.Transaction)
 	if !ok {
-		return "expected *train.Instance for actual arg"
+		return "expected *train.Transaction for actual arg"
 	}
 
-	transaction, ok := expected[0].(*train.Transaction)
-	if !ok {
-		return "expected *train.Transaction for expected arg[0]"
-	}
-
-	dir := filepath.Join(trainInstance.TransactionsDir, transaction.ID, "content")
-	if !dirExists(dir) {
-		return "expected transaction content directory but none found"
+	path := filepath.Join(tx.GetPath(), "content")
+	if !dirExists(path) {
+		return "expected transaction content directory but not found"
 	}
 
 	return ""
 }
 
+// ShouldCreateTransactionJSON is an custom Smarty Streets Convey assertion function verifying the expected publishing
+// transaction json file has been created. A *train.Transaction is required for the "actual" parameter.
 func ShouldCreateTransactionJSON(actual interface{}, expected ...interface{}) string {
-	trainInstance, ok := actual.(*train.Instance)
-	if !ok {
-		return "expected *train.Instance for actual arg"
-	}
-
-	tx, ok := expected[0].(*train.Transaction)
+	tx, ok := actual.(*train.Transaction)
 	if !ok {
 		return "expected *train.Transaction for expected arg[0]"
 	}
 
-	path := filepath.Join(trainInstance.TransactionsDir, tx.ID, "transaction.json")
+	path := filepath.Join(tx.GetPath(), "transaction.json")
 	f, err := os.Open(path)
 	if err != nil {
 		return "unexpected error while reading transaction.json file"
