@@ -1,21 +1,19 @@
 package train
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"path/filepath"
 	"time"
-
-	"github.com/ONSdigital/log.go/log"
 )
 
 type Client struct {
 	Host    string
 	HttpCli http.Client
 }
-
-
 
 func NewClient() *Client {
 	return &Client{
@@ -24,6 +22,7 @@ func NewClient() *Client {
 	}
 }
 
+// Begin creates a new publishing transaction.
 func (c *Client) Begin() (*Transaction, error) {
 	r, err := http.NewRequest(http.MethodPost, c.Host+"/begin", nil)
 	if err != nil {
@@ -35,12 +34,12 @@ func (c *Client) Begin() (*Transaction, error) {
 		return nil, err
 	}
 
-	log.Event(nil, "begin transaction request completed successfully", log.INFO, log.Data{"id": result.Transaction.ID})
 	return result.Transaction, nil
 }
 
+// HealthCheck sends a healthcheck request and checks the status is successful.
 func (c *Client) HealthCheck() (*HealthStatus, error) {
-	req, err := http.NewRequest("GET", "http://localhost:8084/health", nil)
+	req, err := http.NewRequest("GET", c.Host+"/health", nil)
 	if err != nil {
 		return nil, err
 	}
@@ -50,8 +49,27 @@ func (c *Client) HealthCheck() (*HealthStatus, error) {
 		return nil, err
 	}
 
-	log.Event(nil, "The-Train HealthCheck request successful", log.INFO)
 	return &status, nil
+}
+
+// SendManifest send a collection manifest
+func (c *Client) SendManifest(txID, collectionDir string) error {
+	b, err := ioutil.ReadFile(filepath.Join(collectionDir, "manifest.json"))
+	if err != nil {
+		return err
+	}
+
+	r, err := http.NewRequest(http.MethodPost, fmt.Sprintf("%s/CommitManifest?transactionId=%s", c.Host, txID), bytes.NewBuffer(b))
+	if err != nil {
+		return nil
+	}
+
+	var result ResponseEntity
+	if err := c.doReq(r, http.StatusOK, &result); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func (c *Client) doReq(req *http.Request, expectedStatus int, entity interface{}) error {
@@ -76,5 +94,3 @@ func (c *Client) doReq(req *http.Request, expectedStatus int, entity interface{}
 
 	return nil
 }
-
-

@@ -1,6 +1,7 @@
 package train
 
 import (
+	"io/ioutil"
 	"os"
 	"path/filepath"
 
@@ -26,8 +27,35 @@ type HealthStatus struct {
 	Message string `json:"message"`
 }
 
+type FileCopy struct {
+	Source string `json:"source"`
+	Target string `json:"target"`
+}
+
+type FileDelete struct {
+	Source string `json:"source"`
+	Target string `json:"target"`
+}
+
+type Manifest struct {
+	FilesToCopy  []*FileCopy   `json:"filesToCopy"`
+	UrisToDelete []*FileDelete `json:"uriToDelete"`
+}
+
 func (t *Transaction) GetPath() string {
 	return filepath.Join(os.Getenv("zebedee_root"), "zebedee", "transactions", t.ID)
+}
+
+func (t *Transaction) GetContentDirPath() string {
+	return filepath.Join(t.GetPath(), "content")
+}
+
+func (t *Transaction) GetContentURI(uri string) string {
+	return filepath.Join(t.GetContentDirPath(), uri)
+}
+
+func (t *Transaction) GetContent(uri string) ([]byte, error) {
+	return ioutil.ReadFile( filepath.Join(t.GetContentDirPath(), uri))
 }
 
 func (t *Transaction) CleanUp() error {

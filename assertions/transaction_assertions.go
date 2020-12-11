@@ -9,9 +9,29 @@ import (
 	"github.com/ONSdigital/dp-train-tests/train"
 )
 
-// ShouldCreateTransactionDir is an custom Smarty Streets Convey assertion function verifying the expected publishing
+func ShouldCreateTransaction(actual interface{}, expected ...interface{}) string {
+	if result := shouldCreateTransactionDir(actual, expected...); result != "" {
+		return result
+	}
+
+	if result := shouldCreateBackupDir(actual, expected...); result != "" {
+		return result
+	}
+
+	if result := shouldCreateContentDir(actual, expected...); result != "" {
+		return result
+	}
+
+	if result := shouldCreateTransactionJSON(actual, expected...); result != "" {
+		return result
+	}
+
+	return ""
+}
+
+// shouldCreateTransactionDir is an custom Smarty Streets Convey assertion function verifying the expected publishing
 // transaction directory has been created. A *train.Transaction is required for the "actual" parameter.
-func ShouldCreateTransactionDir(actual interface{}, expected ...interface{}) string {
+func shouldCreateTransactionDir(actual interface{}, expected ...interface{}) string {
 	tx, ok := actual.(*train.Transaction)
 	if !ok {
 		return "expected *train.Transaction for actual arg"
@@ -24,9 +44,9 @@ func ShouldCreateTransactionDir(actual interface{}, expected ...interface{}) str
 	return ""
 }
 
-// ShouldCreateBackupDir is an custom Smarty Streets Convey assertion function verifying the expected publishing
+// shouldCreateBackupDir is an custom Smarty Streets Convey assertion function verifying the expected publishing
 // transaction backup directory has been created. A *train.Transaction is required for the "actual" parameter.
-func ShouldCreateBackupDir(actual interface{}, expected ...interface{}) string {
+func shouldCreateBackupDir(actual interface{}, expected ...interface{}) string {
 	tx, ok := actual.(*train.Transaction)
 	if !ok {
 		return "expected *train.Transaction for actual arg"
@@ -40,25 +60,24 @@ func ShouldCreateBackupDir(actual interface{}, expected ...interface{}) string {
 	return ""
 }
 
-// ShouldCreateContentDir is an custom Smarty Streets Convey assertion function verifying the expected publishing
+// shouldCreateContentDir is an custom Smarty Streets Convey assertion function verifying the expected publishing
 // transaction content directory has been created. A *train.Transaction is required for the "actual" parameter.
-func ShouldCreateContentDir(actual interface{}, expected ...interface{}) string {
+func shouldCreateContentDir(actual interface{}, expected ...interface{}) string {
 	tx, ok := actual.(*train.Transaction)
 	if !ok {
 		return "expected *train.Transaction for actual arg"
 	}
 
-	path := filepath.Join(tx.GetPath(), "content")
-	if !dirExists(path) {
+	if !dirExists(tx.GetContentDirPath()) {
 		return "expected transaction content directory but not found"
 	}
 
 	return ""
 }
 
-// ShouldCreateTransactionJSON is an custom Smarty Streets Convey assertion function verifying the expected publishing
+// shouldCreateTransactionJSON is an custom Smarty Streets Convey assertion function verifying the expected publishing
 // transaction json file has been created. A *train.Transaction is required for the "actual" parameter.
-func ShouldCreateTransactionJSON(actual interface{}, expected ...interface{}) string {
+func shouldCreateTransactionJSON(actual interface{}, expected ...interface{}) string {
 	tx, ok := actual.(*train.Transaction)
 	if !ok {
 		return "expected *train.Transaction for expected arg[0]"
@@ -67,14 +86,14 @@ func ShouldCreateTransactionJSON(actual interface{}, expected ...interface{}) st
 	path := filepath.Join(tx.GetPath(), "transaction.json")
 	f, err := os.Open(path)
 	if err != nil {
-		return "unexpected error while reading transaction.json file"
+		return "unexpected error while reading transaction.json file " + err.Error()
 	}
 
 	defer f.Close()
 
 	var txJson train.Transaction
 	if err := json.NewDecoder(f).Decode(&txJson); err != nil {
-		return "unexpected error while marshalling transaction.json file"
+		return "unexpected error while marshalling transaction.json file " + err.Error()
 	}
 
 	if txJson.ID != tx.ID {
