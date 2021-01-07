@@ -4,11 +4,23 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"io/ioutil"
+	"mime/multipart"
 	"net/http"
+	"os"
 	"path/filepath"
 	"time"
+
+	"github.com/ONSdigital/dp-train-tests/collections"
 )
+
+type PublishContent interface {
+	GetFile() string
+	GetURI() string
+	GetPublishURI() string
+	IsZip() bool
+}
 
 type Client struct {
 	Host    string
@@ -53,8 +65,8 @@ func (c *Client) HealthCheck() (*HealthStatus, error) {
 }
 
 // SendManifest send a collection manifest
-func (c *Client) SendManifest(txID, collectionDir string) error {
-	b, err := ioutil.ReadFile(filepath.Join(collectionDir, "manifest.json"))
+func (c *Client) SendManifest(txID string, manifest collections.Manifest) error {
+	b, err := json.Marshal(manifest)
 	if err != nil {
 		return err
 	}
@@ -70,6 +82,57 @@ func (c *Client) SendManifest(txID, collectionDir string) error {
 	}
 
 	return nil
+}
+
+func (c *Client) AddContent(txID string, content PublishContent) error {
+	body, contentType, err := newMultipartUpload(content.GetFile())
+	if err != nil {
+		return err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, fmt.Sprintf("%s/publish?transactionId=%s&uri=%s&zip=%t", c.Host, txID, content.GetPublishURI(), content.IsZip()), body)
+	if err != nil {
+		return err
+	}
+
+	req.Header.Set("Content-Type", contentType)
+
+	var result ResponseEntity
+	if err := c.doReq(req, http.StatusOK, &result); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func newMultipartUpload(file string) (io.Reader, string, error) {
+	body := new(bytes.Buffer)
+	writer := multipart.NewWriter(body)
+
+	filename := filepath.Base(file)
+	if filename == "timeseries-to-publish.zip" {
+
+	}
+
+	part, err := writer.CreateFormFile("file", filepath.Base(file))
+	if err != nil {
+		return nil, "", err
+	}
+
+	f, err := os.Open(file)
+	if err != nil {
+		return nil, "", err
+	}
+
+	defer f.Close()
+
+	_, err = io.Copy(part, f)
+	if err != nil {
+		return nil, "", err
+	}
+
+	writer.Close()
+	return body, writer.FormDataContentType(), nil
 }
 
 func (c *Client) doReq(req *http.Request, expectedStatus int, entity interface{}) error {

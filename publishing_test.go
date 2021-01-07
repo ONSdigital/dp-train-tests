@@ -13,7 +13,7 @@ import (
 	. "github.com/smartystreets/goconvey/convey"
 )
 
-var collectionName = "otttest"
+var testCollection = "otttest"
 
 func TestMain(m *testing.M) {
 	log.Namespace = "dp-train-tests"
@@ -39,14 +39,14 @@ func Test_beingTransaction(t *testing.T) {
 		theTrain := train.NewClient()
 
 		Convey("When a begin new transaction request is sent", func() {
-			transaction, err := theTrain.Begin()
-			defer transaction.CleanUp()
+			tx, err := theTrain.Begin()
+			defer tx.CleanUp()
 
 			So(err, ShouldBeNil)
-			So(transaction, ShouldNotBeNil)
+			So(tx, ShouldNotBeNil)
 
 			Convey("Then a new transaction is created", func() {
-				So(transaction, ShouldCreateTransaction)
+				So(tx, ShouldCreateTransaction)
 			})
 		})
 	})
@@ -76,23 +76,60 @@ func Test_SendManifest(t *testing.T) {
 		defer tx.CleanUp()
 
 		Convey("When a valid send manifest request is sent", func() {
+			col := collections.Get(testCollection)
 
-			colDir := collections.GetPath(collectionName)
-			err := theTrain.SendManifest(tx.ID, colDir)
+			manifest, err := col.GetManifest()
+			So(err, ShouldBeNil)
+
+			err = theTrain.SendManifest(tx.ID, manifest)
+
 			Convey("Then the request is successful", func() {
 				So(err, ShouldBeNil)
 			})
 
-			Convey("And the published files to copy are copied into the transaction content dir", func() {
-
-				manifest, err := collections.GetManifest(collectionName)
-				So(err, ShouldBeNil)
-
+			Convey("And the files to copy are correctly copied into the transaction content dir", func() {
 				for _, item := range manifest.FilesToCopy {
 					src := website.GetContentPath(item.Source)
-					target := tx.GetContentURI(item.Target)
+					target := tx.GetContentFilePath(item.Target)
 
 					So(target, ShouldCopyManifestEntryToContentDir, src)
+				}
+			})
+		})
+	})
+}
+
+func Test_AddContent(t *testing.T) {
+	Convey("Given a transaction has been created", t, func() {
+		theTrain := train.NewClient()
+
+		tx := beginTransaction(theTrain)
+		//defer tx.CleanUp()
+
+		c := collections.Get(testCollection)
+		sendManifest(tx, c, theTrain)
+
+		Convey("When the collection content has been added to the transaction", func() {
+			addContentToTransaction(tx, c, theTrain)
+
+			collectionContent, err := c.GetAllContent()
+			So(err, ShouldBeNil)
+
+			Convey("Then the transaction contains the expected number of files", func() {
+				transactionContent, err := tx.GetAllContent()
+				So(err, ShouldBeNil)
+				So(len(transactionContent), ShouldEqual, len(collectionContent))
+			})
+
+			Convey("And each collection content file exists in the transaction content", func() {
+				for _, file := range collectionContent {
+					So(file, ContentFileExistsInTransaction, tx)
+				}
+			})
+
+			Convey("And each file contains the expected content", func() {
+				for _, colContentItem := range collectionContent {
+					So(colContentItem, ContentIsEqual, tx.GetContent(colContentItem.URI))
 				}
 			})
 		})
@@ -106,4 +143,22 @@ func beginTransaction(theTrain *train.Client) *train.Transaction {
 	So(tx, ShouldCreateTransaction)
 
 	return tx
+}
+
+func sendManifest(tx *train.Transaction, c collections.Collection, theTrain *train.Client) {
+	manifest, err := c.GetManifest()
+	So(err, ShouldBeNil)
+
+	err = theTrain.SendManifest(tx.ID, manifest)
+	So(err, ShouldBeNil)
+}
+
+func addContentToTransaction(tx *train.Transaction, c collections.Collection, theTrain *train.Client) {
+	content, err := c.ContentToPublish()
+	So(err, ShouldBeNil)
+
+	for _, item := range content {
+		err := theTrain.AddContent(tx.ID, item)
+		So(err, ShouldBeNil)
+	}
 }

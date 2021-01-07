@@ -1,6 +1,7 @@
 package train
 
 import (
+	"fmt"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -27,19 +28,10 @@ type HealthStatus struct {
 	Message string `json:"message"`
 }
 
-type FileCopy struct {
-	Source string `json:"source"`
-	Target string `json:"target"`
-}
-
-type FileDelete struct {
-	Source string `json:"source"`
-	Target string `json:"target"`
-}
-
-type Manifest struct {
-	FilesToCopy  []*FileCopy   `json:"filesToCopy"`
-	UrisToDelete []*FileDelete `json:"uriToDelete"`
+type Content struct {
+	File  string
+	URI   string
+	IsZip bool
 }
 
 func (t *Transaction) GetPath() string {
@@ -50,12 +42,29 @@ func (t *Transaction) GetContentDirPath() string {
 	return filepath.Join(t.GetPath(), "content")
 }
 
-func (t *Transaction) GetContentURI(uri string) string {
+func (t *Transaction) GetContentFilePath(uri string) string {
 	return filepath.Join(t.GetContentDirPath(), uri)
 }
 
-func (t *Transaction) GetContent(uri string) ([]byte, error) {
-	return ioutil.ReadFile( filepath.Join(t.GetContentDirPath(), uri))
+func (t *Transaction) GetContent(uri string) *Content {
+	return &Content{
+		File:  filepath.Join(t.GetContentDirPath(), uri),
+		URI:   uri,
+		IsZip: filepath.Ext(uri) == ".zip",
+	}
+}
+
+func (t *Transaction) ContentExists(uri string) bool {
+	path := t.GetContentFilePath(uri)
+
+	if _, err := os.Stat(path); err == nil {
+		return true
+	} else if os.IsNotExist(err) {
+		return false
+	} else {
+		fmt.Printf("error checking file exists: file: %s, error: %s\n", path, err.Error())
+		return false
+	}
 }
 
 func (t *Transaction) CleanUp() error {
@@ -65,4 +74,23 @@ func (t *Transaction) CleanUp() error {
 	}
 
 	return nil
+}
+
+func (t *Transaction) GetAllContent() ([]os.FileInfo, error) {
+	infos := make([]os.FileInfo, 0)
+	err := filepath.Walk(t.GetContentDirPath(), func(path string, info os.FileInfo, err error) error {
+
+		if info.IsDir() || info.Name() == ".DS_Store" {
+			return nil
+		}
+
+		infos = append(infos, info)
+		return nil
+	})
+
+	return infos, err
+}
+
+func (c *Content) GetData() ([]byte, error) {
+	return ioutil.ReadFile(c.File)
 }
